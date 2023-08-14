@@ -1,18 +1,43 @@
-import { test as setup, expect,  } from '@playwright/test';
+import { test as setup, chromium } from "@playwright/test";
 
-const authFile = 'playwright/.auth/gmail-auth.json';
+setup("authenticate", async () => {
+  const browser = await chromium.launch({
+    headless: false,
+    args: [
+      "--disable-dev-shm-usage",
+      "--disable-blink-features=AutomationControlled",
+    ],
+  });
 
-setup('authenticate', async ({ page }) => {
-  // Perform Gmail authentication steps here.
-  await page.goto('https://mail.google.com/');
-  await page.fill('[type="email"]', 'So.Yummy.BestRecipes@gmail.com');
-  await page.getByRole('button', { name: 'next' }).click();
-  await page.fill('[type="password"]', 'BestRecipes');
-  await page.click('[type="submit"]');
-  // Optionally, you can perform checks to ensure authentication was successful.
-  // For example, wait for a specific element that is visible after authentication.
-  await expect(page.locator('.your-selector')).toBeVisible();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const navigationPromise = page.waitForNavigation({
+    waitUntil: "domcontentloaded",
+  });
 
-  // Save authentication state.
-  await page.context().storageState({ path: authFile });
+  await page.setDefaultNavigationTimeout(0);
+  await page.goto("https://mail.google.com/");
+
+  await navigationPromise;
+
+  await page.waitForSelector('input[type="email"]');
+  await page.type('input[type="email"]', "So.Yummy.BestRecipes@gmail.com");
+  await page.click("#identifierNext");
+
+  await page.waitForSelector('input[type="password"]', { visible: true });
+  await page.type('input[type="password"]', "BestRecipes");
+
+  await page.waitForSelector("#passwordNext", { visible: true });
+  await page.click("#passwordNext");
+  await page.waitForNavigation();
+
+  const targetElement = await page.$("div.bsU");
+
+  if (targetElement) {
+    const elementText = await targetElement.innerText();
+    const processedText = elementText.replace(/\s+/g, " ").trim();
+    console.log(`Unread mail: ${processedText}`);
+  }
+
+  await browser.close();
 });
